@@ -22,6 +22,8 @@ namespace jaytwo.DataExport.Csv.Tests
                 new { a = "hello", b = "world" },
                 new { a = "foo", b = "bar" },
                 new { a = "fizz", b = "buzz" },
+                new { a = "with \"quotes\"", b = "with\rreturns\nand newlines" },
+                new { a = string.Empty, b = "and empty string" },
             };
 
             // act
@@ -58,6 +60,8 @@ namespace jaytwo.DataExport.Csv.Tests
                 new { a = "hello", b = "world" },
                 new { a = "foo", b = "bar" },
                 new { a = "fizz", b = "buzz" },
+                new { a = "with \"quotes\"", b = "with\rreturns\nand newlines" },
+                new { a = string.Empty, b = "and empty string" },
             };
 
             // act
@@ -93,6 +97,8 @@ namespace jaytwo.DataExport.Csv.Tests
                 new { a = "hello", b = "world" },
                 new { a = "foo", b = "bar" },
                 new { a = "fizz", b = "buzz" },
+                new { a = "with \"quotes\"", b = "with\rreturns\nand newlines" },
+                new { a = string.Empty, b = "and empty string" },
             };
 
             // act
@@ -129,6 +135,8 @@ namespace jaytwo.DataExport.Csv.Tests
                 new { a = "hello", b = "world" },
                 new { a = "foo", b = "bar" },
                 new { a = "fizz", b = "buzz" },
+                new { a = "with \"quotes\"", b = "with\rreturns\nand newlines" },
+                new { a = string.Empty, b = "and empty string" },
             };
 
             // act
