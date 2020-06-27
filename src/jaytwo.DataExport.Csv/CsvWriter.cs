@@ -28,7 +28,7 @@ namespace jaytwo.DataExport.Csv
             _disposeTextWriter = disposeTextWriter;
         }
 
-        public bool IncludeHeader { get; set; }
+        public bool IncludeHeader { get; set; } = true;
 
         public static CsvWriter Create(StringBuilder stringBuilder)
         {
@@ -114,7 +114,7 @@ namespace jaytwo.DataExport.Csv
             return WriteAsync(rows as IEnumerable<T>);
         }
 
-        public Task WriteHeaderAsync<T>(T anonymousObject)
+        public Task WriteHeaderAsync<T>(T anonymousObjectPrototype)
         {
             return WriteHeaderAsync<T>();
         }
@@ -127,7 +127,7 @@ namespace jaytwo.DataExport.Csv
             });
         }
 
-        public void WriteHeader<T>(T anonymousObject)
+        public void WriteHeader<T>(T anonymousObjectPrototype)
         {
             WriteHeader<T>();
         }
