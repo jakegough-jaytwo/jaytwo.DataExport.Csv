@@ -50,10 +50,44 @@ namespace jaytwo.DataExport.Csv
         }
 #endif
 
+#if NETSTANDARD2
+        public Task WriteAsync<T>(IAsyncEnumerable<T> rows) => WriteAsync<T>(rows, CancellationToken.None);
+
+        public async Task WriteAsync<T>(IAsyncEnumerable<T> rows, CancellationToken cancellationToken)
+        {
+            await _semaphore.RunAsync(async () =>
+            {
+                if (!_writeStarted)
+                {
+                    if (IncludeHeader)
+                    {
+                        await WriteHeaderWithoutSemaphoreAsync<T>();
+                    }
+
+                    _writeStarted = true;
+                }
+            });
+
+            await foreach (var row in rows.WithCancellation(cancellationToken)) // await foreach is a C# 8.0 language feature
+            {
+                var line = GetCsvRow(row);
+
+                await _semaphore.RunAsync(async () =>
+                {
+                    await _textWriter.WriteLineAsync(line);
+                });
+            }
+
+            await _semaphore.RunAsync(async () =>
+            {
+                await _textWriter.FlushAsync();
+            });
+        }
+#endif
+
         public async Task WriteAsync<T>(IEnumerable<T> rows)
         {
-            await _semaphore.WaitAsync();
-            try
+            await _semaphore.RunAsync(async () =>
             {
                 if (!_writeStarted)
                 {
@@ -72,11 +106,7 @@ namespace jaytwo.DataExport.Csv
                 }
 
                 await _textWriter.FlushAsync();
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
+            });
         }
 
         public Task WriteAsync<T>(params T[] rows)
@@ -91,15 +121,10 @@ namespace jaytwo.DataExport.Csv
 
         public async Task WriteHeaderAsync<T>()
         {
-            await _semaphore.WaitAsync();
-            try
+            await _semaphore.RunAsync(async () =>
             {
                 await WriteHeaderWithoutSemaphoreAsync<T>();
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
+            });
         }
 
         public void WriteHeader<T>(T anonymousObject)
@@ -109,21 +134,15 @@ namespace jaytwo.DataExport.Csv
 
         public void WriteHeader<T>()
         {
-            _semaphore.Wait();
-            try
+            _semaphore.Run(() =>
             {
                 WriteHeaderWithoutSemaphore<T>();
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
+            });
         }
 
         public void Write<T>(IEnumerable<T> rows)
         {
-            _semaphore.Wait();
-            try
+            _semaphore.Run(() =>
             {
                 if (!_writeStarted)
                 {
@@ -142,11 +161,7 @@ namespace jaytwo.DataExport.Csv
                 }
 
                 _textWriter.Flush();
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
+            });
         }
 
         public void Write<T>(params T[] rows)
@@ -158,19 +173,14 @@ namespace jaytwo.DataExport.Csv
         {
             if (_disposeTextWriter)
             {
-                _semaphore.Wait();
-                try
+                _semaphore.Run(() =>
                 {
                     _textWriter.Dispose();
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
+                });
             }
         }
 
-        protected virtual bool ShouldEQuote(string value)
+        protected internal virtual bool ShouldEQuote(string value)
         {
             var result = (value != null)
                 && (value.Contains(",")
@@ -181,13 +191,13 @@ namespace jaytwo.DataExport.Csv
             return result;
         }
 
-        protected virtual string Quote(string value)
+        protected internal virtual string Quote(string value)
         {
             var result = "\"" + value.Replace("\"", "\"\"") + "\"";
             return result;
         }
 
-        protected virtual string GetValueAsString(object value)
+        protected internal virtual string GetValueAsString(object value)
         {
             if (value is null)
             {
@@ -211,17 +221,17 @@ namespace jaytwo.DataExport.Csv
             }
         }
 
-        protected virtual string GetValueAsString(DateTimeOffset value)
+        protected internal virtual string GetValueAsString(DateTimeOffset value)
         {
-            return value.ToString("o");
+            return value.ToString("o"); // "o" is the 'RoundTrip' fomrat specifier
         }
 
-        protected virtual string GetValueAsString(DateTime value)
+        protected internal virtual string GetValueAsString(DateTime value)
         {
-            return value.ToString("o");
+            return value.ToString("o"); // "o" is the 'RoundTrip' fomrat specifier
         }
 
-        protected virtual string GetValueAsString(byte[] value)
+        protected internal virtual string GetValueAsString(byte[] value)
         {
             return Convert.ToBase64String(value);
         }
