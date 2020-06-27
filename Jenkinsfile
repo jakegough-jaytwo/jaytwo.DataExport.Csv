@@ -1,7 +1,7 @@
 library 'JenkinsBuilderLibrary'
 
 helper.gitHubUsername = 'jakegough'
-helper.gitHubRepository = 'jaytwo.CsvWriter'
+helper.gitHubRepository = 'jaytwo.DataExport.Csv'
 helper.gitHubTokenCredentialsId = 'github-personal-access-token-jakegough'
 helper.nuGetCredentialsId = 'nuget-org-jaytwo'
 helper.xunitTestResultsPattern = 'out/testResults/**/*.trx'

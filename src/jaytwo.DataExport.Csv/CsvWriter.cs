@@ -7,9 +7,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace jaytwo.CsvWriter
+namespace jaytwo.DataExport.Csv
 {
-    public class CsvReporter : IDisposable
+    public class CsvWriter : IDisposable
     {
         private readonly TextWriter _textWriter;
         private readonly bool _disposeTextWriter;
@@ -17,12 +17,12 @@ namespace jaytwo.CsvWriter
         private bool _writeStarted = false;
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
 
-        public CsvReporter(TextWriter textWriter)
+        public CsvWriter(TextWriter textWriter)
             : this(textWriter, true)
         {
         }
 
-        public CsvReporter(TextWriter textWriter, bool disposeTextWriter)
+        public CsvWriter(TextWriter textWriter, bool disposeTextWriter)
         {
             _textWriter = textWriter;
             _disposeTextWriter = disposeTextWriter;
@@ -30,23 +30,23 @@ namespace jaytwo.CsvWriter
 
         public bool IncludeHeader { get; set; }
 
-        public static CsvReporter Create(StringBuilder stringBuilder)
+        public static CsvWriter Create(StringBuilder stringBuilder)
         {
             var writer = new StringWriter(stringBuilder);
-            return new CsvReporter(writer);
+            return new CsvWriter(writer);
         }
 
-        public static CsvReporter Create(Stream stream)
+        public static CsvWriter Create(Stream stream)
         {
             var writer = new StreamWriter(stream);
-            return new CsvReporter(writer);
+            return new CsvWriter(writer);
         }
 
 #if !NETSTANDARD1_1
-        public static CsvReporter Create(string fileName)
+        public static CsvWriter Create(string fileName)
         {
             var writer = File.CreateText(fileName);
-            return new CsvReporter(writer);
+            return new CsvWriter(writer);
         }
 #endif
 
@@ -79,9 +79,9 @@ namespace jaytwo.CsvWriter
             }
         }
 
-        public Task WriteAsync<T>(T row)
+        public Task WriteAsync<T>(params T[] rows)
         {
-            return WriteAsync<T>(new[] { row });
+            return WriteAsync(rows as IEnumerable<T>);
         }
 
         public Task WriteHeaderAsync<T>(T anonymousObject)
@@ -149,9 +149,9 @@ namespace jaytwo.CsvWriter
             }
         }
 
-        public void Write<T>(T row)
+        public void Write<T>(params T[] rows)
         {
-            Write<T>(new[] { row });
+            Write(rows as IEnumerable<T>);
         }
 
         public void Dispose()

@@ -3,16 +3,16 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace jaytwo.CsvWriter.Tests
+namespace jaytwo.DataExport.Csv.Tests
 {
-    public class CsvReporterTests
+    public class CsvWriterTests
     {
         [Fact]
         public async Task WriteAsync_works()
         {
             // arrange
             var stringBuilder = new StringBuilder();
-            var csv = CsvReporter.Create(stringBuilder);
+            var csv = CsvWriter.Create(stringBuilder);
             var rows = new[]
             {
                 new { a = "hello", b = "world" },
@@ -32,7 +32,7 @@ namespace jaytwo.CsvWriter.Tests
         {
             // arrange
             var stringBuilder = new StringBuilder();
-            var csv = CsvReporter.Create(stringBuilder);
+            var csv = CsvWriter.Create(stringBuilder);
             var rows = new[]
             {
                 new { a = "hello", b = "world" },

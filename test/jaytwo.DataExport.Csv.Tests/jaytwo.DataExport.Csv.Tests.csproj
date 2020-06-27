@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\jaytwo.CsvWriter\jaytwo.CsvWriter.csproj" />
+    <ProjectReference Include="..\..\src\jaytwo.DataExport.Csv\jaytwo.DataExport.Csv.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

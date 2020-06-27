@@ -1,5 +1,5 @@
 TIMESTAMP?=$(shell date +'%Y%m%d%H%M%S')
-DOCKER_TAG?=jaytwo_csvwriter
+DOCKER_TAG?=jaytwo_dataexport_csv
 
 default: clean build
 
@@ -12,19 +12,19 @@ restore:
 	dotnet restore . --verbosity minimal
   
 build: restore
-	dotnet build ./jaytwo.CsvWriter.sln
+	dotnet build ./jaytwo.DataExport.Csv.sln
 
 test: unit-test
   
 unit-test: build
 	rm -rf out/testResults
-	dotnet test ./test/jaytwo.CsvWriter.Tests \
+	dotnet test ./test/jaytwo.DataExport.Csv.Tests \
 		--results-directory ../../out/testResults \
-		--logger "trx;LogFileName=jaytwo.CsvWriter.Tests.trx"
+		--logger "trx;LogFileName=jaytwo.DataExport.Csv.Tests.trx"
 
 pack:
 	rm -rf out/packed
-	cd ./src/jaytwo.CsvWriter; \
+	cd ./src/jaytwo.DataExport.Csv; \
 		dotnet pack -o ../../out/packed ${PACK_ARG}
 
 pack-beta: PACK_ARG=--version-suffix beta-${TIMESTAMP}
@@ -32,7 +32,7 @@ pack-beta: pack
 
 publish:
 	rm -rf out/published
-	cd ./src/jaytwo.CsvWriter; \
+	cd ./src/jaytwo.DataExport.Csv; \
 		dotnet publish -o ../../out/published
 
 DOCKER_BASE_TAG?=${DOCKER_TAG}__base

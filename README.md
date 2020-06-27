@@ -1,6 +1,6 @@
-# jaytwo.CsvWriter
+# jaytwo.DataExport.Csv
 
-[![NuGet version (jaytwo.CsvWriter)](https://img.shields.io/nuget/v/jaytwo.CsvWriter.svg?style=flat-square)](https://www.nuget.org/packages/jaytwo.CsvWriter/)
+[![NuGet version (jaytwo.DataExport.Csv)](https://img.shields.io/nuget/v/jaytwo.DataExport.Csv.svg?style=flat-square)](https://www.nuget.org/packages/jaytwo.DataExport.Csv/)
 
 Making it slightly easier to write a quick CSV.
 
@@ -9,7 +9,7 @@ Making it slightly easier to write a quick CSV.
 Add the NuGet package
 
 ```
-PM> Install-Package jaytwo.CsvWriter
+PM> Install-Package jaytwo.DataExport.Csv
 ```
 
 ## Usage
