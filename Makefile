@@ -3,6 +3,9 @@ DOCKER_TAG?=jaytwo_dataexport_csv
 
 default: clean build
 
+deps:
+	dotnet tool install -g dotnet-reportgenerator-globaltool
+
 clean: 
 	find . -name bin | xargs --no-run-if-empty rm -vrf
 	find . -name obj | xargs --no-run-if-empty rm -vrf
@@ -18,9 +21,19 @@ test: unit-test
   
 unit-test: build
 	rm -rf out/testResults
-	dotnet test ./test/jaytwo.DataExport.Csv.Tests \
+	rm -rf out/coverage
+	cd ./test/jaytwo.DataExport.Tests; \
+		dotnet test \
 		--results-directory ../../out/testResults \
 		--logger "trx;LogFileName=jaytwo.DataExport.Csv.Tests.trx"
+	reportgenerator \
+		-reports:./out/coverage/**/coverage.cobertura.xml \
+		-targetdir:./out/coverage/ \
+		-reportTypes:Cobertura
+	reportgenerator \
+		-reports:./out/coverage/**/coverage.cobertura.xml \
+		-targetdir:./out/coverage/html \
+		-reportTypes:Html
 
 pack:
 	rm -rf out/packed
