@@ -22,7 +22,7 @@ test: unit-test
 unit-test: build
 	rm -rf out/testResults
 	rm -rf out/coverage
-	cd ./test/jaytwo.DataExport.Tests; \
+	cd ./test/jaytwo.DataExport.Csv.Tests; \
 		dotnet test \
 		--results-directory ../../out/testResults \
 		--logger "trx;LogFileName=jaytwo.DataExport.Csv.Tests.trx"
