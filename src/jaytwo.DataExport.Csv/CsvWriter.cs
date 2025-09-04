@@ -1,8 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,122 +36,82 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     public static CsvWriter Create(StringBuilder stringBuilder)
     {
         var writer = new StringWriter(stringBuilder);
-        return new CsvWriter(writer);
+        return new CsvWriter(writer, disposeTextWriter: true);
     }
 
     public static CsvWriter Create(Stream stream)
     {
         var writer = new StreamWriter(stream);
-        return new CsvWriter(writer);
+        return new CsvWriter(writer, disposeTextWriter: true);
     }
+
+    public Task WriteAsync(IDictionary[] rows, CancellationToken cancellationToken = default)
+        => WriteAsync(rows as IEnumerable<IDictionary>, cancellationToken);
+
+    public async Task WriteAsync(IEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
+        => await WriteAsync<IDictionary>(ToAsyncEnumerable(rows), cancellationToken);
+
+    public async Task WriteAsync(IAsyncEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
+        => await WriteAsync<IDictionary>(rows, cancellationToken);
+
+    public Task WriteAsync<T>(T[] rows, CancellationToken cancellationToken = default)
+        => WriteAsync(rows as IEnumerable<T>, cancellationToken);
+
+    public async Task WriteAsync<T>(IEnumerable<T> rows, CancellationToken cancellationToken = default)
+        => await WriteAsync(ToAsyncEnumerable(rows), cancellationToken);
 
     public async Task WriteAsync<T>(IAsyncEnumerable<T> rows, CancellationToken cancellationToken = default)
     {
+        await foreach (var row in rows.WithCancellation(cancellationToken))
+        {
+            await WriteAsync<T>(row, cancellationToken);
+        }
+
+        await FlushAsync();
+    }
+
+    public async Task WriteAsync<T>(T row, CancellationToken cancellationToken = default)
+    {
         await _semaphore.RunAsync(async () =>
         {
             if (!_writeStarted)
             {
                 if (IncludeHeader)
                 {
-                    await WriteHeaderWithoutSemaphoreAsync<T>();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await WriteHeaderWithoutSemaphoreAsync<T>(row);
                 }
 
                 _writeStarted = true;
             }
         });
 
-        await foreach (var row in rows.WithCancellation(cancellationToken)) // await foreach is a C# 8.0 language feature
+        var line = GetCsvRow(row);
+        if (line != null)
         {
-            var line = GetCsvRow(row);
-
             await _semaphore.RunAsync(async () =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 await _textWriter.WriteLineAsync(line);
             });
         }
+    }
 
+    public async Task WriteHeaderAsync<T>(T row)
+    {
         await _semaphore.RunAsync(async () =>
         {
+            await WriteHeaderWithoutSemaphoreAsync<T>(row);
+        });
+    }
+
+    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        await _semaphore.RunAsync(async () =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             await _textWriter.FlushAsync();
         });
-    }
-
-    public async Task WriteAsync<T>(IEnumerable<T> rows)
-    {
-        await _semaphore.RunAsync(async () =>
-        {
-            if (!_writeStarted)
-            {
-                if (IncludeHeader)
-                {
-                    await WriteHeaderWithoutSemaphoreAsync<T>();
-                }
-
-                _writeStarted = true;
-            }
-
-            foreach (var row in rows)
-            {
-                var line = GetCsvRow(row);
-                await _textWriter.WriteLineAsync(line);
-            }
-
-            await _textWriter.FlushAsync();
-        });
-    }
-
-    public Task WriteAsync<T>(params T[] rows)
-        => WriteAsync(rows as IEnumerable<T>);
-
-    public Task WriteHeaderAsync<T>(T anonymousObjectPrototype)
-        => WriteHeaderAsync<T>();
-
-    public async Task WriteHeaderAsync<T>()
-    {
-        await _semaphore.RunAsync(async () =>
-        {
-            await WriteHeaderWithoutSemaphoreAsync<T>();
-        });
-    }
-
-    public void WriteHeader<T>(T anonymousObjectPrototype)
-        => WriteHeader<T>();
-
-    public void WriteHeader<T>()
-    {
-        _semaphore.Run(() =>
-        {
-            WriteHeaderWithoutSemaphore<T>();
-        });
-    }
-
-    public void Write<T>(IEnumerable<T> rows)
-    {
-        _semaphore.Run(() =>
-        {
-            if (!_writeStarted)
-            {
-                if (IncludeHeader)
-                {
-                    WriteHeaderWithoutSemaphore<T>();
-                }
-
-                _writeStarted = true;
-            }
-
-            foreach (var row in rows)
-            {
-                var line = GetCsvRow(row);
-                _textWriter.WriteLine(line);
-            }
-
-            _textWriter.Flush();
-        });
-    }
-
-    public void Write<T>(params T[] rows)
-    {
-        Write(rows as IEnumerable<T>);
     }
 
     public void Dispose()
@@ -173,21 +136,41 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         }
     }
 
-    protected internal virtual bool ShouldEQuote(string? value)
+    protected internal virtual bool ShouldQuote(string? value)
     {
         var result = (value != null)
-            && (value.Contains(",")
-                || value.Contains("\"")
-                || value.Contains("\r")
-                || value.Contains("\n"));
+            && (value.Contains(',')
+                || value.Contains('"')
+                || value.Contains('\r')
+                || value.Contains('\n'));
 
         return result;
     }
 
     protected internal virtual string? Quote(string? value)
     {
-        var result = "\"" + value?.Replace("\"", "\"\"") + "\"";
+        var result = '"' + value?.Replace("\"", "\"\"") + '"';
         return result;
+    }
+
+    protected internal IDictionary? ToDictionary(object? row)
+    {
+        if (row == null)
+        {
+            return null;
+        }
+        else if (row is IDictionary dict)
+        {
+            return dict;
+        }
+
+        var asDictionary = row.GetType()
+            .GetRuntimeProperties()
+            .ToDictionary(
+                x => x.Name,
+                x => GetValueAsString(x.GetValue(row)));
+
+        return asDictionary;
     }
 
     protected internal virtual string? GetValueAsString(object? value)
@@ -196,78 +179,102 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         {
             return null;
         }
-        else if (value is DateTimeOffset)
+
+        return value switch
         {
-            return GetValueAsString((DateTimeOffset)value);
-        }
-        else if (value is DateTime)
+            string str => str,
+            DateTimeOffset x => x.ToString("o", CultureInfo.InvariantCulture),
+            DateTime x => x.ToString("o", CultureInfo.InvariantCulture),
+            TimeSpan x => x.ToString("c", CultureInfo.InvariantCulture),
+            Enum x => x.ToString("G"),
+            Guid x => x.ToString("D"),
+            bool x => x.ToString(CultureInfo.InvariantCulture),
+            byte x => x.ToString(CultureInfo.InvariantCulture),
+            sbyte x => x.ToString(CultureInfo.InvariantCulture),
+            int x => x.ToString(CultureInfo.InvariantCulture),
+            uint x => x.ToString(CultureInfo.InvariantCulture),
+            short x => x.ToString(CultureInfo.InvariantCulture),
+            ushort x => x.ToString(CultureInfo.InvariantCulture),
+            long x => x.ToString(CultureInfo.InvariantCulture),
+            ulong x => x.ToString(CultureInfo.InvariantCulture),
+            float x => x.ToString(CultureInfo.InvariantCulture),
+            double x => x.ToString(CultureInfo.InvariantCulture),
+            decimal x => x.ToString(CultureInfo.InvariantCulture),
+            byte[] x => Convert.ToBase64String(x),
+            IFormattable x => x.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString(),
+        };
+    }
+
+    private static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(IEnumerable<T> source, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var item in source)
         {
-            return GetValueAsString((DateTime)value);
-        }
-        else if (value is byte[])
-        {
-            return GetValueAsString((byte[])value);
-        }
-        else
-        {
-            return value.ToString();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            yield return item;
+            await Task.Yield(); // ensures it's really async
         }
     }
 
-    protected internal virtual string GetValueAsString(DateTimeOffset value)
+    private async Task WriteHeaderWithoutSemaphoreAsync<T>(T row)
     {
-        return value.ToString("o"); // "o" is the 'RoundTrip' fomrat specifier
-    }
-
-    protected internal virtual string GetValueAsString(DateTime value)
-    {
-        return value.ToString("o"); // "o" is the 'RoundTrip' fomrat specifier
-    }
-
-    protected internal virtual string GetValueAsString(byte[] value)
-    {
-        return Convert.ToBase64String(value);
-    }
-
-    private void WriteHeaderWithoutSemaphore<T>()
-    {
-        var line = GetCsvHeader<T>();
-        _textWriter.WriteLine(line);
-    }
-
-    private async Task WriteHeaderWithoutSemaphoreAsync<T>()
-    {
-        var line = GetCsvHeader<T>();
+        var line = GetCsvHeader(row);
         await _textWriter.WriteLineAsync(line);
     }
 
-    private string GetCsvHeader<T>()
+    private string? GetCsvHeader(object? row)
     {
-        var propertyNames = typeof(T).GetRuntimeProperties()
-            .Select(m => m.Name)
-            .ToList();
-
-        return GetCsvRowString(propertyNames);
+        return row switch
+        {
+            null => null,
+            IDictionary x => GetCsvHeader(x),
+            _ => GetCsvHeader(ToDictionary(row)),
+        };
     }
 
-    private string? GetCsvRow<T>(T obj)
+    private string? GetCsvHeader(IDictionary? row)
     {
-        var propertyValues = obj?.GetType().GetRuntimeProperties()
-            .Select(x => GetValueAsString(x.GetValue(obj)))
-            .ToList();
-
-        if (propertyValues == null)
+        if (row == null)
         {
             return null;
         }
 
-        return GetCsvRowString(propertyValues!);
+        var values = row.Keys.Cast<object>()
+            .Select(x => GetValueAsString(x)!)
+            .ToList();
+
+        return GetCsvLineString(values);
     }
 
-    private string GetCsvRowString(IList<string> values)
+    private string? GetCsvRow(object? row)
+    {
+        return row switch
+        {
+            null => null,
+            IDictionary x => GetCsvRow(x),
+            _ => GetCsvRow(ToDictionary(row)),
+        };
+    }
+
+    private string? GetCsvRow(IDictionary? row)
+    {
+        if (row == null)
+        {
+            return null;
+        }
+
+        var values = row.Values.Cast<object?>()
+            .Select(x => GetValueAsString(x)!)
+            .ToList();
+
+        return GetCsvLineString(values);
+    }
+
+    private string GetCsvLineString(IList<string> values)
     {
         var escapedValues = values
-            .Select(x => ShouldEQuote(x) ? Quote(x) : x)
+            .Select(x => ShouldQuote(x) ? Quote(x) : x)
             .ToArray();
 
         var result = string.Join(",", escapedValues);
