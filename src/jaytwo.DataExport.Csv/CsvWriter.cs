@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -38,6 +39,40 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     public bool IncludeHeader { get; set; } = DefaultIncludeHeader;
 
     public char Delimiter { get; set; } = DefaultDelimiter;
+
+    public static async Task ExportAsync(
+        string fileName,
+        IDataReader data,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
+        CancellationToken cancellationToken = default)
+    {
+        using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
+
+        await ExportAsync(
+            fileStream,
+            data,
+            includeHeader: includeHeader,
+            delimiter: delimiter,
+            cancellationToken: cancellationToken);
+    }
+
+    public static async Task ExportAsync(
+        Stream outputStream,
+        IDataReader data,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
+        bool leaveOpen = DefaultLeaveOpen,
+        CancellationToken cancellationToken = default)
+    {
+        using var writer = Create(
+            outputStream,
+            includeHeader: includeHeader,
+            delimiter: delimiter,
+            leaveOpen: leaveOpen);
+
+        await writer.WriteManyAsync(data, cancellationToken);
+    }
 
     public static async Task ExportAsync<T>(
         string fileName,
@@ -134,6 +169,22 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         };
     }
 
+    public async Task WriteManyAsync(IDataReader dataReader, CancellationToken cancellationToken = default)
+    {
+        while (dataReader.Read())
+        {
+            await WriteAsync<IDataRecord>(dataReader, cancellationToken);
+        }
+
+        await FlushAsync();
+    }
+
+    public async Task WriteManyAsync(IEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
+        => await WriteManyAsync<IDictionary>(rows, cancellationToken);
+
+    public async Task WriteManyAsync(IAsyncEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
+        => await WriteManyAsync<IDictionary>(rows, cancellationToken);
+
     public async Task WriteManyAsync<T>(IEnumerable<T> rows, CancellationToken cancellationToken = default)
         => await WriteManyAsync(ToAsyncEnumerable(rows), cancellationToken);
 
@@ -155,11 +206,8 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             {
                 if (IncludeHeader)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await WriteHeaderWithoutSemaphoreAsync<T>(row);
+                    await WriteHeaderWithoutSemaphoreAsync(row!, cancellationToken);
                 }
-
-                _writeStarted = true;
             }
         });
 
@@ -168,17 +216,25 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         {
             await _semaphore.RunAsync(async () =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await _textWriter.WriteLineAsync(line);
+                await WriteLineAsync(line, cancellationToken);
             });
         }
     }
 
-    public async Task WriteHeaderAsync<T>(T row)
+    public async Task WriteAsync(IDataReader reader, CancellationToken cancellationToken = default)
+        => await WriteManyAsync(reader, cancellationToken);
+
+    public async Task WriteAsync(IDataRecord row, CancellationToken cancellationToken = default)
+        => await WriteAsync<IDataRecord>(row, cancellationToken);
+
+    public async Task WriteAsync(IDictionary row, CancellationToken cancellationToken = default)
+        => await WriteAsync<IDictionary>(row, cancellationToken);
+
+    public async Task WriteHeaderAsync(object row, CancellationToken cancellationToken = default)
     {
         await _semaphore.RunAsync(async () =>
         {
-            await WriteHeaderWithoutSemaphoreAsync<T>(row);
+            await WriteHeaderWithoutSemaphoreAsync(row, cancellationToken);
         });
     }
 
@@ -230,16 +286,14 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         return result;
     }
 
-    protected internal IDictionary? ToDictionary(object? row)
+    protected internal IDictionary ToDictionary(object row)
     {
-        if (row == null)
-        {
-            return null;
-        }
-        else if (row is IDictionary dict)
+        if (row is IDictionary dict)
         {
             return dict;
         }
+
+        // TODO: system.text.json?
 
         var asDictionary = row.GetType()
             .GetRuntimeProperties()
@@ -294,10 +348,25 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         }
     }
 
-    private async Task WriteHeaderWithoutSemaphoreAsync<T>(T row)
+    private async Task WriteLineAsync(string line, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _textWriter.WriteLineAsync(line);
+
+        if (!_writeStarted)
+        {
+            _writeStarted = true;
+        }
+    }
+
+    private async Task WriteHeaderWithoutSemaphoreAsync(object? row, CancellationToken cancellationToken)
     {
         var line = GetCsvHeader(row);
-        await _textWriter.WriteLineAsync(line);
+
+        if (line != null)
+        {
+            await WriteLineAsync(line, cancellationToken);
+        }
     }
 
     private string? GetCsvHeader(object? row)
@@ -305,9 +374,19 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         return row switch
         {
             null => null,
+            IDataRecord x => GetCsvHeader(x),
             IDictionary x => GetCsvHeader(x),
             _ => GetCsvHeader(ToDictionary(row)),
         };
+    }
+
+    private string GetCsvHeader(IDataRecord row)
+    {
+        var headers = Enumerable.Range(0, row.FieldCount)
+            .Select(i => row.GetName(i))
+            .ToList();
+
+        return GetCsvLineString(headers);
     }
 
     private string? GetCsvHeader(IDictionary? row)
@@ -330,22 +409,34 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         {
             null => null,
             IDictionary x => GetCsvRow(x),
+            IDataRecord x => GetCsvRow(x),
             _ => GetCsvRow(ToDictionary(row)),
         };
     }
 
-    private string? GetCsvRow(IDictionary? row)
+    private string? GetCsvRow(IDataRecord row)
     {
-        if (row == null)
-        {
-            return null;
-        }
+        var values = new object[row.FieldCount];
+        row.GetValues(values);
+        return GetCsvLineString(values);
+    }
 
+    private string GetCsvRow(IDictionary row)
+    {
         var values = row.Values.Cast<object?>()
             .Select(x => GetValueAsString(x)!)
             .ToList();
 
         return GetCsvLineString(values);
+    }
+
+    private string GetCsvLineString(IList<object> values)
+    {
+        var strings = values
+            .Select(x => GetValueAsString(x)!)
+            .ToList();
+
+        return GetCsvLineString(strings);
     }
 
     private string GetCsvLineString(IList<string> values)
