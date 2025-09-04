@@ -12,7 +12,7 @@ namespace jaytwo.DataExport.Csv.Tests;
 public class CsvWriterTests
 {
     [Fact]
-    public async Task WriteAsync_anonymous_types_works()
+    public async Task WriteManyAsync_anonymous_types_works()
     {
         // arrange
         var stringBuilder = new StringBuilder();
@@ -28,7 +28,7 @@ public class CsvWriterTests
         };
 
         // act
-        await csv.WriteAsync(rows);
+        await csv.WriteManyAsync(rows);
 
         // assert
         Assert.NotEmpty(stringBuilder.ToString());
@@ -49,7 +49,7 @@ public class CsvWriterTests
     }
 
     [Fact]
-    public async Task WriteAsync_dictionaries_works()
+    public async Task WriteManyAsync_dictionaries_works()
     {
         // arrange
         var stringBuilder = new StringBuilder();
@@ -65,7 +65,7 @@ public class CsvWriterTests
         };
 
         // act
-        await csv.WriteAsync(rows);
+        await csv.WriteManyAsync(rows);
 
         // assert
         Assert.NotEmpty(stringBuilder.ToString());
@@ -86,7 +86,7 @@ public class CsvWriterTests
     }
 
     [Fact]
-    public async Task WriteAsync_anonymous_types_without_header_works()
+    public async Task WriteManyAsync_anonymous_types_without_header_works()
     {
         // arrange
         var stringBuilder = new StringBuilder();
@@ -103,7 +103,7 @@ public class CsvWriterTests
         };
 
         // act
-        await csv.WriteAsync(rows);
+        await csv.WriteManyAsync(rows);
 
         // assert
         Assert.NotEmpty(stringBuilder.ToString());
@@ -124,7 +124,7 @@ public class CsvWriterTests
     }
 
     [Fact]
-    public async Task WriteAsync_dictionaries_without_header_works()
+    public async Task WriteManyAsync_dictionaries_without_header_works()
     {
         // arrange
         var stringBuilder = new StringBuilder();
@@ -141,7 +141,7 @@ public class CsvWriterTests
         };
 
         // act
-        await csv.WriteAsync(rows);
+        await csv.WriteManyAsync(rows);
 
         // assert
         Assert.NotEmpty(stringBuilder.ToString());

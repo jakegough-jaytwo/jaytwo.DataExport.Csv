@@ -15,7 +15,7 @@ namespace jaytwo.DataExport.Csv;
 public class CsvWriter : IAsyncDisposable, IDisposable
 {
     private readonly TextWriter _textWriter;
-    private readonly bool _disposeTextWriter;
+    private bool _leaveOpen;
 
     private bool _writeStarted = false;
     private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
@@ -25,42 +25,96 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     {
     }
 
-    public CsvWriter(TextWriter textWriter, bool disposeTextWriter)
+    public CsvWriter(TextWriter textWriter, bool leaveOpen)
     {
         _textWriter = textWriter;
-        _disposeTextWriter = disposeTextWriter;
+        _leaveOpen = leaveOpen;
     }
 
     public bool IncludeHeader { get; set; } = true;
 
-    public static CsvWriter Create(StringBuilder stringBuilder)
+    public static async Task ExportAsync<T>(
+        string fileName,
+        IAsyncEnumerable<T> data,
+        bool includeHeader = true,
+        CancellationToken cancellationToken = default)
+    {
+        using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
+
+        await ExportAsync(
+            fileStream,
+            data,
+            includeHeader: includeHeader,
+            cancellationToken: cancellationToken);
+    }
+
+    public static async Task ExportAsync<T>(
+        string fileName,
+        IEnumerable<T> data,
+        bool includeHeader = true,
+        CancellationToken cancellationToken = default)
+    {
+        using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
+
+        await ExportAsync(
+            fileStream,
+            data,
+            includeHeader: includeHeader,
+            cancellationToken: cancellationToken);
+    }
+
+    public static async Task ExportAsync<T>(
+        Stream outputStream,
+        IAsyncEnumerable<T> data,
+        bool includeHeader = true,
+        bool leaveOpen = true,
+        CancellationToken cancellationToken = default)
+    {
+        using var writer = Create(
+            outputStream,
+            includeHeader: includeHeader,
+            leaveOpen: leaveOpen);
+
+        await writer.WriteManyAsync(data, cancellationToken);
+    }
+
+    public static async Task ExportAsync<T>(
+        Stream outputStream,
+        IEnumerable<T> data,
+        bool includeHeader = true,
+        bool leaveOpen = true,
+        CancellationToken cancellationToken = default)
+    {
+        using var writer = Create(
+            outputStream,
+            includeHeader: includeHeader,
+            leaveOpen: leaveOpen);
+
+        await writer.WriteManyAsync(data, cancellationToken);
+    }
+
+    public static CsvWriter Create(StringBuilder stringBuilder, bool includeHeader = true)
     {
         var writer = new StringWriter(stringBuilder);
-        return new CsvWriter(writer, disposeTextWriter: true);
+        return new CsvWriter(writer, leaveOpen: false)
+        {
+            IncludeHeader = includeHeader,
+        };
     }
 
-    public static CsvWriter Create(Stream stream)
+    public static CsvWriter Create(Stream stream, bool includeHeader = true, bool leaveOpen = false)
     {
-        var writer = new StreamWriter(stream);
-        return new CsvWriter(writer, disposeTextWriter: true);
+        var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 4096, leaveOpen: leaveOpen);
+        return new CsvWriter(writer, leaveOpen: false) // close the StreamWriter, not the underlying stream
+        {
+            IncludeHeader = includeHeader,
+        };
     }
 
-    public Task WriteAsync(IDictionary[] rows, CancellationToken cancellationToken = default)
-        => WriteAsync(rows as IEnumerable<IDictionary>, cancellationToken);
+    public async Task WriteManyAsync<T>(IEnumerable<T> rows, CancellationToken cancellationToken = default)
+        => await WriteManyAsync(ToAsyncEnumerable(rows), cancellationToken);
 
-    public async Task WriteAsync(IEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
-        => await WriteAsync<IDictionary>(ToAsyncEnumerable(rows), cancellationToken);
-
-    public async Task WriteAsync(IAsyncEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
-        => await WriteAsync<IDictionary>(rows, cancellationToken);
-
-    public Task WriteAsync<T>(T[] rows, CancellationToken cancellationToken = default)
-        => WriteAsync(rows as IEnumerable<T>, cancellationToken);
-
-    public async Task WriteAsync<T>(IEnumerable<T> rows, CancellationToken cancellationToken = default)
-        => await WriteAsync(ToAsyncEnumerable(rows), cancellationToken);
-
-    public async Task WriteAsync<T>(IAsyncEnumerable<T> rows, CancellationToken cancellationToken = default)
+    public async Task WriteManyAsync<T>(IAsyncEnumerable<T> rows, CancellationToken cancellationToken = default)
     {
         await foreach (var row in rows.WithCancellation(cancellationToken))
         {
@@ -116,7 +170,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
     public void Dispose()
     {
-        if (_disposeTextWriter)
+        if (!_leaveOpen)
         {
             _semaphore.Run(() =>
             {
@@ -127,7 +181,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposeTextWriter)
+        if (!_leaveOpen)
         {
             await _semaphore.RunAsync(async () =>
             {
