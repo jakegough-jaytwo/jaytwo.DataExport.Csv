@@ -1,67 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <LangVersion>8.0</LangVersion>
-    <TargetFrameworks>net45;netstandard1.1;netstandard1.3;netstandard1.6;netstandard2.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net6.0;net8.0</TargetFrameworks>
     <VersionPrefix>0.1.1</VersionPrefix>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/jakegough/jaytwo.DataExport.Csv.git</RepositoryUrl>
+    <RepositoryUrl>https://github.com/jakegough-jaytwo/jaytwo.DataExport.Csv.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="1.1.1" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="1.1.1" />
-  </ItemGroup>
-
-  <!--
-    // https://docs.microsoft.com/en-us/dotnet/standard/frameworks
-    // preprocessor symbols for free:
-    //    NETFRAMEWORK, NET45,
-    //    NETSTANDARD, NETSTANDARD1_1, NETSTANDARD1_3, NETSTANDARD1_6, NETSTANDARD2_0, NETSTANDARD2_1
-  -->
-
-  <!-- sourcelink (only needed on the published package project) -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
+    <InternalsVisibleTo Include="jaytwo.DataExport.Csv.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Link="README.md" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-  </PropertyGroup>
-  <!-- /sourcelink -->
-
-  <!-- stylecop -->
-  <ItemGroup>
-    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" PrivateAssets="All" />
-    <PackageReference Include="StyleCop.Analyzers.Error" Version="1.0.2" PrivateAssets="All" />
-    <AdditionalFiles Include="$(ProjectDir)..\..\stylecop.json" Link="stylecop.json" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <StyleCopTreatErrorsAsWarnings>true</StyleCopTreatErrorsAsWarnings>
-    <CodeAnalysisRuleSet>$(ProjectDir)..\..\stylecop.ruleset</CodeAnalysisRuleSet>
-  </PropertyGroup>
-  <!-- /stylecop -->
-
-  <!-- coverlet & cobertura -->
-  <ItemGroup>
-    <PackageReference Include="coverlet.msbuild" Version="2.9.0" PrivateAssets="All" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <CollectCoverage>true</CollectCoverage>
-    <Exclude>[xunit.*]*</Exclude>
-    <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
-    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
-    <CoverletOutput>$(MSBuildThisFileDirectory)../../out/coverage/$(AssemblyName)/$(TargetFramework)/</CoverletOutput>
-  </PropertyGroup>
-  <!-- /coverlet & cobertura -->
 
 </Project>
