@@ -14,6 +14,10 @@ namespace jaytwo.DataExport.Csv;
 
 public class CsvWriter : IAsyncDisposable, IDisposable
 {
+    internal const bool DefaultIncludeHeader = true;
+    internal const bool DefaultLeaveOpen = true;
+    internal const char DefaultDelimiter = ',';
+
     private readonly TextWriter _textWriter;
     private bool _leaveOpen;
 
@@ -21,7 +25,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
 
     public CsvWriter(TextWriter textWriter)
-        : this(textWriter, true)
+        : this(textWriter, leaveOpen: DefaultLeaveOpen)
     {
     }
 
@@ -31,12 +35,15 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         _leaveOpen = leaveOpen;
     }
 
-    public bool IncludeHeader { get; set; } = true;
+    public bool IncludeHeader { get; set; } = DefaultIncludeHeader;
+
+    public char Delimiter { get; set; } = DefaultDelimiter;
 
     public static async Task ExportAsync<T>(
         string fileName,
         IAsyncEnumerable<T> data,
-        bool includeHeader = true,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
         CancellationToken cancellationToken = default)
     {
         using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -45,13 +52,15 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             fileStream,
             data,
             includeHeader: includeHeader,
+            delimiter: delimiter,
             cancellationToken: cancellationToken);
     }
 
     public static async Task ExportAsync<T>(
         string fileName,
         IEnumerable<T> data,
-        bool includeHeader = true,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
         CancellationToken cancellationToken = default)
     {
         using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -60,19 +69,22 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             fileStream,
             data,
             includeHeader: includeHeader,
+            delimiter: delimiter,
             cancellationToken: cancellationToken);
     }
 
     public static async Task ExportAsync<T>(
         Stream outputStream,
         IAsyncEnumerable<T> data,
-        bool includeHeader = true,
-        bool leaveOpen = true,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
+        bool leaveOpen = DefaultLeaveOpen,
         CancellationToken cancellationToken = default)
     {
         using var writer = Create(
             outputStream,
             includeHeader: includeHeader,
+            delimiter: delimiter,
             leaveOpen: leaveOpen);
 
         await writer.WriteManyAsync(data, cancellationToken);
@@ -81,33 +93,44 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     public static async Task ExportAsync<T>(
         Stream outputStream,
         IEnumerable<T> data,
-        bool includeHeader = true,
-        bool leaveOpen = true,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
+        bool leaveOpen = DefaultLeaveOpen,
         CancellationToken cancellationToken = default)
     {
         using var writer = Create(
             outputStream,
             includeHeader: includeHeader,
+            delimiter: delimiter,
             leaveOpen: leaveOpen);
 
         await writer.WriteManyAsync(data, cancellationToken);
     }
 
-    public static CsvWriter Create(StringBuilder stringBuilder, bool includeHeader = true)
+    public static CsvWriter Create(
+        StringBuilder stringBuilder,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter)
     {
         var writer = new StringWriter(stringBuilder);
         return new CsvWriter(writer, leaveOpen: false)
         {
             IncludeHeader = includeHeader,
+            Delimiter = delimiter,
         };
     }
 
-    public static CsvWriter Create(Stream stream, bool includeHeader = true, bool leaveOpen = false)
+    public static CsvWriter Create(
+        Stream stream,
+        bool includeHeader = DefaultIncludeHeader,
+        char delimiter = DefaultDelimiter,
+        bool leaveOpen = DefaultLeaveOpen)
     {
         var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 4096, leaveOpen: leaveOpen);
         return new CsvWriter(writer, leaveOpen: false) // close the StreamWriter, not the underlying stream
         {
             IncludeHeader = includeHeader,
+            Delimiter = delimiter,
         };
     }
 
@@ -193,7 +216,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     protected internal virtual bool ShouldQuote(string? value)
     {
         var result = (value != null)
-            && (value.Contains(',')
+            && (value.Contains(Delimiter)
                 || value.Contains('"')
                 || value.Contains('\r')
                 || value.Contains('\n'));
@@ -331,7 +354,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             .Select(x => ShouldQuote(x) ? Quote(x) : x)
             .ToArray();
 
-        var result = string.Join(",", escapedValues);
+        var result = string.Join(Delimiter, escapedValues);
         return result;
     }
 }
