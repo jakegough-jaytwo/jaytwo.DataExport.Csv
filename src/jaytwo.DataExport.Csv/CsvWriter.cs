@@ -350,8 +350,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
     private async Task WriteLineAsync(string line, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        await _textWriter.WriteLineAsync(line);
+        await _textWriter.WriteLineAsync(line.AsMemory(), cancellationToken);
 
         if (!_writeStarted)
         {
