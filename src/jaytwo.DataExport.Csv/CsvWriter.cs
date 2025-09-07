@@ -176,7 +176,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             await WriteAsync<IDataRecord>(dataReader, cancellationToken);
         }
 
-        await FlushAsync();
+        await FlushAsync(cancellationToken);
     }
 
     public async Task WriteManyAsync(IEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
@@ -195,7 +195,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             await WriteAsync<T>(row, cancellationToken);
         }
 
-        await FlushAsync();
+        await FlushAsync(cancellationToken);
     }
 
     public async Task WriteAsync<T>(T row, CancellationToken cancellationToken = default)
