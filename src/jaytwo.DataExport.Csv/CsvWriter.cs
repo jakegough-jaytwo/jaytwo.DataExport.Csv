@@ -13,11 +13,16 @@ using System.Threading.Tasks;
 
 namespace jaytwo.DataExport.Csv;
 
-public class CsvWriter : IAsyncDisposable, IDisposable
+public class CsvWriter :
+#if NET6_0_OR_GREATER
+    IAsyncDisposable, IDisposable
+#else
+    IDisposable
+#endif
 {
     internal const bool DefaultIncludeHeader = true;
     internal const bool DefaultLeaveOpen = true;
-    internal const char DefaultDelimiter = ',';
+    internal const string DefaultDelimiter = ",";
 
     private readonly TextWriter _textWriter;
     private bool _leaveOpen;
@@ -38,13 +43,13 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
     public bool IncludeHeader { get; set; } = DefaultIncludeHeader;
 
-    public char Delimiter { get; set; } = DefaultDelimiter;
+    public string Delimiter { get; set; } = DefaultDelimiter;
 
     public static async Task ExportAsync(
         string fileName,
         IDataReader data,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         CancellationToken cancellationToken = default)
     {
         using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -61,7 +66,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         Stream outputStream,
         IDataReader data,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         bool leaveOpen = DefaultLeaveOpen,
         CancellationToken cancellationToken = default)
     {
@@ -76,9 +81,9 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
     public static async Task ExportAsync<T>(
         string fileName,
-        IAsyncEnumerable<T> data,
+        IEnumerable<T> data,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         CancellationToken cancellationToken = default)
     {
         using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -91,11 +96,12 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             cancellationToken: cancellationToken);
     }
 
+#if NET6_0_OR_GREATER
     public static async Task ExportAsync<T>(
         string fileName,
-        IEnumerable<T> data,
+        IAsyncEnumerable<T> data,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         CancellationToken cancellationToken = default)
     {
         using var fileStream = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -112,7 +118,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         Stream outputStream,
         IAsyncEnumerable<T> data,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         bool leaveOpen = DefaultLeaveOpen,
         CancellationToken cancellationToken = default)
     {
@@ -124,12 +130,13 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
         await writer.WriteManyAsync(data, cancellationToken);
     }
+#endif
 
     public static async Task ExportAsync<T>(
         Stream outputStream,
         IEnumerable<T> data,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         bool leaveOpen = DefaultLeaveOpen,
         CancellationToken cancellationToken = default)
     {
@@ -145,7 +152,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     public static CsvWriter Create(
         StringBuilder stringBuilder,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter)
+        string delimiter = DefaultDelimiter)
     {
         var writer = new StringWriter(stringBuilder);
         return new CsvWriter(writer, leaveOpen: false)
@@ -158,7 +165,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     public static CsvWriter Create(
         Stream stream,
         bool includeHeader = DefaultIncludeHeader,
-        char delimiter = DefaultDelimiter,
+        string delimiter = DefaultDelimiter,
         bool leaveOpen = DefaultLeaveOpen)
     {
         var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 4096, leaveOpen: leaveOpen);
@@ -182,11 +189,21 @@ public class CsvWriter : IAsyncDisposable, IDisposable
     public async Task WriteManyAsync(IEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
         => await WriteManyAsync<IDictionary>(rows, cancellationToken);
 
+    public async Task WriteManyAsync<T>(IEnumerable<T> rows, CancellationToken cancellationToken = default)
+    {
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await WriteAsync<T>(row, cancellationToken);
+            await Task.Yield(); // ensures it's really async
+        }
+
+        await FlushAsync(cancellationToken);
+    }
+
+#if NET6_0_OR_GREATER
     public async Task WriteManyAsync(IAsyncEnumerable<IDictionary> rows, CancellationToken cancellationToken = default)
         => await WriteManyAsync<IDictionary>(rows, cancellationToken);
-
-    public async Task WriteManyAsync<T>(IEnumerable<T> rows, CancellationToken cancellationToken = default)
-        => await WriteManyAsync(ToAsyncEnumerable(rows), cancellationToken);
 
     public async Task WriteManyAsync<T>(IAsyncEnumerable<T> rows, CancellationToken cancellationToken = default)
     {
@@ -197,6 +214,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
 
         await FlushAsync(cancellationToken);
     }
+#endif
 
     public async Task WriteAsync<T>(T row, CancellationToken cancellationToken = default)
     {
@@ -258,6 +276,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         }
     }
 
+#if NET6_0_OR_GREATER
     public async ValueTask DisposeAsync()
     {
         if (!_leaveOpen)
@@ -268,6 +287,7 @@ public class CsvWriter : IAsyncDisposable, IDisposable
             });
         }
     }
+#endif
 
     protected internal virtual bool ShouldQuote(string? value)
     {
@@ -337,21 +357,13 @@ public class CsvWriter : IAsyncDisposable, IDisposable
         };
     }
 
-    private static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(IEnumerable<T> source, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        foreach (var item in source)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            yield return item;
-            await Task.Yield(); // ensures it's really async
-        }
-    }
-
     private async Task WriteLineAsync(string line, CancellationToken cancellationToken = default)
     {
+#if NET6_0_OR_GREATER
         await _textWriter.WriteLineAsync(line.AsMemory(), cancellationToken);
-
+#else
+        await _textWriter.WriteLineAsync(line);
+#endif
         if (!_writeStarted)
         {
             _writeStarted = true;
